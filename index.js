@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
+const jwt = require('jsonwebtoken');
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -26,6 +27,43 @@ const client = new MongoClient(uri, {
    }
 });
 
+// এখানে তিনটা প্যারামিটার দিতে হবে।
+/* const verifyJWT = (req, res, next) => {
+   // console.log("Hitting verify jWT");
+   // console.log(req.headers.authorization);
+   const authorization = req.headers.authorization;
+   if (!authorization) {
+      return res.status(401).send({ error: true, message: "Unauthorized access. " });
+   }
+   const token = authorization.split(' ')[1];
+   console.log("Inside verify JWT :", token);
+   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+      if (error) {
+         return res.send({ error: true, message: "Unauthorized access." });
+      }
+      req.decoded = decoded;
+      next();
+   });
+
+}; */
+// ===================recap===============
+/// ekhane extra prameter hishebe next parameter nite hobe 
+const verifyJWT = (req, res, next) => {
+   const authorization = req.headers.authorization;
+   if (!authorization) {
+      return res.status(401).send({ error: true, message: "unauthorized access" });
+   }
+   const token = authorization.split(' ')[1];
+   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+      if (error) {
+         return res.status(401).send({ error: true, message: "unauthorized access." });
+      }
+      // ekhane set kora hoyeche
+      req.decoded = decoded;
+      next();
+   });
+};
+
 async function run() {
    try {
       // Connect the client to the server	(optional starting in v4.7)
@@ -35,6 +73,19 @@ async function run() {
       const servicesCollection = client.db('car_doctor').collection('services');
       const bookingCollection = client.db('car_doctor').collection('bookings');
 
+      // ==========================JWT=================
+      app.post('/jwt', (req, res) => {
+         const user = req.body;
+         console.log(user);
+         const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+         console.log(token);
+         res.send({ token });
+      });
+
+
+
+      // =================================services routes ============================
+      // =============================================================================
       //step-2 
       app.get('/services', async (req, res) => {
          const cursor = servicesCollection.find();
@@ -56,9 +107,20 @@ async function run() {
          res.send(result);
       });
 
+      // =================================booking routes ============================
+      // ============================================================================
       // step-5
-      app.get('/bookings', async (req, res) => {
+      app.get('/bookings', verifyJWT, async (req, res) => {
+
+         // ekhane read kora hoyeche
+         const decoded = req.decoded;
+         console.log('comeback after verify', decoded);
+         if (decoded.email !== req.query.email) {
+            return res.status(403).send({ error: 1, message: "forbidden access" });
+         }
+
          // console.log(req.query.email);
+         // console.log(req.headers.authorization);
          let query = {};
          if (req.query?.email) {
             query = { email: req.query.email };
